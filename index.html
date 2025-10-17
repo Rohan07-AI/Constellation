@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hari Priya Constellation - Final Stable</title>
+    <style>
+        /* --- GENERAL & BACKGROUND --- */
+        body {
+            background-color: #00001a;
+            margin: 0;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            position: relative;
+            color: #E0FFFF;
+        }
+
+        /* --- STAR FIELD CONTAINER (The Sky) --- */
+        #star-field {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            perspective: 500px;
+        }
+
+        /* --- CELESTIAL BODIES (Added Moon and Planets) --- */
+        #moon {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            background: radial-gradient(circle at 30% 30%, #F0F8FF, #ADD8E6, #D3D3D3);
+            border-radius: 50%;
+            box-shadow: 0 0 40px rgba(173, 216, 230, 0.6);
+            top: 10%; 
+            left: 20%;
+            z-index: 50;
+            opacity: 0.9;
+        }
+
+        .planet {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(1px); 
+            z-index: 50;
+            opacity: 0.8;
+        }
+
+        #planet-1 {
+            width: 50px;
+            height: 50px;
+            background: radial-gradient(circle, #FFA07A, #FF4500); 
+            box-shadow: 0 0 30px #FF4500;
+            top: 80%;
+            left: 80%;
+        }
+
+        #planet-2 {
+            width: 35px;
+            height: 35px;
+            background: radial-gradient(circle, #98FB98, #3CB371); 
+            box-shadow: 0 0 20px #3CB371;
+            top: 25%;
+            right: 10%;
+        }
+        
+        /* --- KEYFRAMES FOR LIVE SKY EFFECT --- */
+        @keyframes star-fall {
+            0% { transform: translateY(0) scale(1); opacity: 0.5; }
+            50% { opacity: 0.8; }
+            100% { transform: translateY(20px) scale(0.8); opacity: 0.3; }
+        }
+
+        /* --- INDIVIDUAL STAR STYLING (Subtle Glow) --- */
+        .star {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background-color: #FFFFFF;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(173, 216, 230, 0.8), 0 0 5px #FFFFFF; 
+            opacity: 0.8;
+            transition: transform 3s ease-in-out, opacity 1s;
+            will-change: transform, opacity;
+            z-index: 10;
+        }
+        
+        /* Style for background stars to make them 'live' */
+        .star.background-star {
+            animation-name: star-fall; 
+            animation-iteration-count: infinite;
+            animation-direction: alternate;
+            animation-timing-function: ease-in-out;
+        }
+
+        /* --- CONSTELLATION LINE STYLING (Subtle Glow) --- */
+        .constellation-line {
+            position: absolute;
+            background-color: rgba(173, 216, 230, 0.5); 
+            height: 1.5px; 
+            box-shadow: 0 0 8px rgba(173, 216, 230, 0.8); 
+            transform-origin: left center;
+            transition: width 1.5s ease-out;
+            width: 0;
+            opacity: 0;
+            z-index: 5;
+            will-change: width, opacity;
+        }
+
+        .constellation-line.draw {
+            opacity: 1;
+            width: var(--line-length);
+        }
+
+        /* --- BUTTON STYLING --- */
+        #unfold-button {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 12px 35px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #ADD8E6;
+            border: 1px solid #ADD8E6;
+            border-radius: 5px;
+            font-size: 1.3em;
+            cursor: pointer;
+            z-index: 100;
+            transition: opacity 0.5s;
+            backdrop-filter: blur(2px);
+            text-shadow: 0 0 5px #ADD8E6;
+        }
+
+        #unfold-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #unfold-button.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* --- DESCRIPTION TEXT STYLING --- */
+        #description-text {
+            position: absolute;
+            bottom: 10%;
+            text-align: center;
+            color: #E0FFFF;
+            font-size: 1.1em;
+            opacity: 0;
+            transition: opacity 2s ease-in;
+            z-index: 100;
+            padding: 10px;
+            max-width: 80%;
+            line-height: 1.5;
+            text-shadow: 0 0 5px rgba(173, 216, 230, 0.5);
+        }
+
+        #description-text.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="star-field">
+    </div>
+    
+    <div id="moon"></div>
+    <div id="planet-1" class="planet"></div>
+    <div id="planet-2" class="planet"></div>
+
+    <button id="unfold-button">Unfold Constellation</button>
+
+    <div id="description-text">
+        "Every star knows your name, I just drew what they already whispered."
+    </div>
+
+    <script>
+        // --- 1. CONFIGURATION ---
+        const STAR_COUNT = 800;
+        const NAME_WIDTH_PX = 550;
+        const NAME_HEIGHT_PX = 90;
+        const FIELD = document.getElementById('star-field');
+        const BUTTON = document.getElementById('unfold-button');
+        const DESCRIPTION_TEXT = document.getElementById('description-text');
+        const STARS_ARRAY = [];
+        const ROWS = 5; 
+        
+        // **FINAL CLEANED STAR MAP** - R is corrected to have a diagonal leg.
+        // The diagonal leg is created by placing stars at (R4, C12) and (R5, C14).
+        const STAR_MAP_HARI_PRIYA_2D = [
+            // H (3) A (4) R (4) I (1) | P (4) R (4) I (1) Y (3) A (4) - 43 Total Columns
+            // Row 1
+            [1,0,1, 0,0, 0,1,1,0, 0,0, 1,1,1,0, 0,0, 1, 0,0,0, 1,1,1,0, 0,0, 1,1,1,0, 0,0, 1, 0,0, 1,0,1, 0,0, 0,1,1,0],
+            // Row 2
+            [1,0,1, 0,0, 1,0,0,1, 0,0, 1,0,0,1, 0,0, 1, 0,0,0, 1,0,0,1, 0,0, 1,0,0,1, 0,0, 1, 0,0, 1,0,1, 0,0, 1,0,0,1],
+            // Row 3 (Middle)
+            [1,1,1, 0,0, 1,1,1,1, 0,0, 1,1,1,1, 0,0, 1, 0,0,0, 1,1,1,1, 0,0, 1,1,1,1, 0,0, 1, 0,0, 0,1,0, 0,0, 1,1,1,1],
+            // Row 4 (R diagonal top: R is (1,0,1,0) -> (1,1,0,0) - corrected column 12)
+            [1,0,1, 0,0, 1,0,0,1, 0,0, 1,0,1,0, 0,0, 1, 0,0,0, 1,0,0,0, 0,0, 1,0,1,0, 0,0, 1, 0,0, 0,1,0, 0,0, 1,0,0,1],
+            // Row 5 (Bottom - R diagonal bottom: R is (1,0,0,1) -> (1,0,0,1) - corrected column 14)
+            [1,0,1, 0,0, 1,0,0,1, 0,0, 1,0,0,1, 0,0, 1, 0,0,0, 1,0,0,0, 0,0, 1,0,0,1, 0,0, 1, 0,0, 0,1,0, 0,0, 1,0,0,1]
+        ];
+        
+        // Final Fix for R: Columns 11-14: (1,1,1,1), (1,0,0,1), (1,1,0,0), (1,0,1,0), (1,0,0,1) -> 
+        // Star at R4/C12 creates the diagonal leg to R5/C14.
+
+        const STAR_MAP_HARI_PRIYA = STAR_MAP_HARI_PRIYA_2D.flat();
+        const COLS = STAR_MAP_HARI_PRIYA_2D[0].length; 
+
+        // --- 2. STAR GENERATION ---
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+
+        function createStars() {
+            for (let i = 0; i < STAR_COUNT; i++) {
+                const star = document.createElement('div');
+                star.classList.add('star');
+                star.style.left = `${Math.random() * vw}px`;
+                star.style.top = `${Math.random() * vh}px`;
+                star.style.opacity = Math.random() * 0.5 + 0.5;
+                star.initialX = parseFloat(star.style.left);
+                star.initialY = parseFloat(star.style.top);
+                star.initialOpacity = parseFloat(star.style.opacity); 
+                FIELD.appendChild(star);
+                STARS_ARRAY.push(star);
+            }
+        }
+
+        // --- 3. ALIGNMENT LOGIC ---
+
+        /**
+         * FIX: Returns the star's precise final target position (used for line drawing)
+         * instead of its real-time visual position (which can be mid-transition).
+         */
+        function getStarPosition(starElement) {
+            // Use the stored target coordinates for perfect, timing-independent alignment.
+            const x = starElement.targetX || starElement.initialX;
+            const y = starElement.targetY || starElement.initialY;
+            return { x: x, y: y };
+        }
+
+        function calculateTargetPositions() {
+            const requiredStarsForName = STAR_MAP_HARI_PRIYA.filter(val => val === 1).length;
+
+            const letterStars = STARS_ARRAY.slice(0, requiredStarsForName);
+            const remainingStars = STARS_ARRAY.slice(requiredStarsForName);
+            
+            const centerX = vw / 2;
+            const centerY = vh / 2;
+            
+            const startY = centerY - (NAME_HEIGHT_PX / 2);
+            const startX = centerX - (NAME_WIDTH_PX / 2);
+
+            const cellWidth = NAME_WIDTH_PX / COLS;
+            const cellHeight = NAME_HEIGHT_PX / ROWS;
+            
+            const gridMap = {};
+
+            let targetIndex = 0;
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    const mapIndex = r * COLS + c;
+                    if (STAR_MAP_HARI_PRIYA[mapIndex] === 1) {
+                        if (targetIndex < letterStars.length) {
+                            const star = letterStars[targetIndex];
+                            
+                            // Store the exact, calculated target coordinates on the element
+                            star.targetX = startX + (c * cellWidth) + (cellWidth / 2);
+                            star.targetY = startY + (r * cellHeight) + (cellHeight / 2);
+                            
+                            star.mapCol = c; 
+                            star.mapRow = r;
+                            
+                            gridMap[`${r}-${c}`] = star; 
+                            targetIndex++;
+                        }
+                    }
+                }
+            }
+            
+            letterStars.sort(() => Math.random() - 0.5);
+
+            // Set targets for background stars and add animation class
+            remainingStars.forEach(star => {
+                star.targetX = star.initialX; 
+                star.targetY = star.initialY;
+                star.classList.add('background-star');
+                star.style.animationDuration = `${Math.random() * 4 + 6}s`; 
+                star.style.animationDelay = `${Math.random() * -5}s`; 
+            });
+
+            return gridMap; 
+        }
+
+        // --- 4. LINE DRAWING LOGIC ---
+
+        function drawLines(gridMap) {
+            const connectionsToMake = [];
+
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    const star1 = gridMap[`${r}-${c}`];
+                    if (!star1) continue;
+
+                    const starH = gridMap[`${r}-${c + 1}`];
+                    if (starH) {
+                        connectionsToMake.push([star1, starH]);
+                    }
+
+                    const starV = gridMap[`${r + 1}-${c}`];
+                    if (starV) {
+                        connectionsToMake.push([star1, starV]);
+                    }
+                }
+            }
+
+            // ADD DIAGONAL CONNECTIONS FOR R's LEG (R -> R4/C12 to R5/C14)
+            // First R (columns 11-14)
+            const r1_diagonal_start = gridMap[`4-12`]; 
+            const r1_diagonal_end = gridMap[`5-14`]; 
+            if (r1_diagonal_start && r1_diagonal_end) {
+                connectionsToMake.push([r1_diagonal_start, r1_diagonal_end]);
+            }
+            
+            // Second R (columns 27-30)
+            const r2_diagonal_start = gridMap[`4-28`]; 
+            const r2_diagonal_end = gridMap[`5-30`]; 
+            if (r2_diagonal_start && r2_diagonal_end) {
+                connectionsToMake.push([r2_diagonal_start, r2_diagonal_end]);
+            }
+
+
+            const uniqueConnections = new Map();
+            connectionsToMake.forEach(([star1, star2]) => {
+                const key = [star1.mapRow, star1.mapCol, star2.mapRow, star2.mapCol].sort().join('-');
+                if (!uniqueConnections.has(key)) {
+                    uniqueConnections.set(key, [star1, star2]);
+                }
+            });
+
+            const finalConnections = Array.from(uniqueConnections.values()).sort(() => Math.random() - 0.5);
+
+            finalConnections.forEach(([star1, star2], index) => {
+                setTimeout(() => {
+                    // Use the fixed getStarPosition function for perfect line alignment
+                    const center1 = getStarPosition(star1);
+                    const center2 = getStarPosition(star2);
+
+                    const distance = Math.sqrt((center2.x - center1.x)**2 + (center2.y - center1.y)**2);
+                    const angle = Math.atan2(center2.y - center1.y, center2.x - center1.x) * 180 / Math.PI;
+
+                    const line = document.createElement('div');
+                    line.classList.add('constellation-line');
+                    line.style.left = `${center1.x}px`;
+                    line.style.top = `${center1.y}px`;
+                    line.style.transform = `rotate(${angle}deg)`;
+                    line.style.setProperty('--line-length', `${distance}px`);
+
+                    FIELD.appendChild(line);
+
+                    requestAnimationFrame(() => {
+                        line.classList.add('draw');
+                    });
+                }, index * 80);
+            });
+
+            const totalLineDrawTime = finalConnections.length * 80 + 1500; 
+            setTimeout(() => {
+                DESCRIPTION_TEXT.classList.add('show');
+            }, totalLineDrawTime);
+        }
+
+
+        // --- 5. ANIMATION EXECUTION ---
+
+        async function unfoldConstellation() {
+            BUTTON.classList.add('hidden');
+
+            const gridMap = calculateTargetPositions();
+
+            // Apply transforms to move all stars
+            STARS_ARRAY.forEach(star => {
+                const deltaX = star.targetX - star.initialX;
+                const deltaY = star.targetY - star.initialY;
+                
+                if (deltaX !== 0 || deltaY !== 0) {
+                    star.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                } else {
+                    star.style.transform = `translate(0, 0)`; 
+                }
+            });
+
+            // Wait for stars to finish moving (3s) before line drawing sequence begins
+            await new Promise(resolve => setTimeout(resolve, 3000)); 
+
+            drawLines(gridMap);
+        }
+
+        // --- 6. INITIALIZATION ---
+        createStars();
+        
+        BUTTON.addEventListener('click', unfoldConstellation);
+    </script>
+</body>
+</html>
